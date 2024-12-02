@@ -1,170 +1,155 @@
-import pygame
+from pygame import *
+from time import sleep
 
 
-pygame.init()
+init()
 
-clock = pygame.time.Clock()
-back = (200, 240, 240)
-mw = pygame.display.set_mode((500, 500))
+clock = time.Clock()
+back = (0,0,0)
+mw = display.set_mode((700, 500))
+
+mw_size = mw.get_size()
 
 
-def end_screen(mode):
-    global game_finished
-    font = pygame.font.Font(None, 74)
-    if mode == "won":
-        mw.fill((240, 240, 240))
-        text = font.render("You Won!", True, (0, 0, 0))
-        mw.blit(text, (130, 230))
+class GameSprite(sprite.Sprite):
+    def __init__(self, img, blur_img, x, y, w, h, speed=5):
+        super().__init__()
+        self.image = image.load(img)
+        self.blur_image = image.load(blur_img)
+        self.w = w
+        self.h = h
+        self.speed = speed
+        self.rect = self.image.get_rect()
+        self.rect.center = (x, y)        
 
-        ball_speed = 0
-        platform_speed = 0
-    elif mode == "lose":
-        mw.fill((240, 240, 240))
-        text = font.render("You Lose!", True, (0, 0, 0))
-        mw.blit(text, (130, 230))
 
-    else:
-        suicide = 2 + "2"
 
-    game_finished = True
-        
+class Player(GameSprite):
+    def __init__(self, img, blur_img, x, y, w, h, speed=5):
+        self.hiden = False
+        self.score = 0
+        super().__init__(img, blur_img, x, y, w, h, speed)
 
-class Area():
-    def __init__(self, window, width, height, x, y, color):
-        self.window = window
-        self.width = width
-        self.height = height
-        self.x = x
-        self.y = y
-        self.fill_color = color if color is not None else back
-        self.rect = pygame.Rect(x, y, width, height)
-    
-    def change_color(self, new_color):
-        self.fill_color = new_color
-    
-    def fill(self):
-        pygame.draw.rect(self.window, self.fill_color, self.rect)
-    
-    def outline(self, color, width):
-        pygame.draw.rect(self.window, color, self.rect, width)
-    
-    def collidepoint(self, x, y):
-        return self.rect.collidepoint(x, y)
-
-    def colliderect(self, rect):
-        return self.rect.colliderect(rect)
-
-class Picture(Area):
-    def __init__(self, window, width, height, x, y, filename):
-        super().__init__(window, width, height, x, y, None)
-        self.image = pygame.image.load(filename)
     def draw(self):
-        self.window.blit(self.image, (self.rect.x, self.rect.y))
+        mw.blit(self.image, self.rect.topleft)
+        mw.blit(self.blur_image, (self.rect.center[0] - 24, self.rect.center[1] - 64))
 
-offset = 55
+
+class Ball(GameSprite):
+    def __init__(self, img, blur_img, x, y ,w, h):
+        super().__init__(img, blur_img, x, y, w, h)
+        self.speed_x = 3
+        self.speed_y = 2
+        self.last_hit_player = None
+
+    def speed_up(self):
+        self.speed_x += 0.2 if self.speed_x >= 0 else -0.2
+        self.speed_y += 0.2 if self.speed_y >= 0 else -0.2
+        
+    def update(self):
+        self.rect.x += int(self.speed_x)
+        self.rect.y += int(self.speed_y)
+
+        if self.rect.x + self.w <= 0:
+            lose(players[0])
+        if self.rect.x >= mw_size[0]:
+            lose(players[1])
+
+        if self.rect.y <= 0 or self.rect.y + self.h >= mw_size[1]:
+            self.speed_y *= -1
+
+        for i, player in enumerate(players):
+            if sprite.collide_rect(self, player):
+                if self.last_hit_player != i:
+                    self.speed_x *= -1                
+                    diff = (player.rect.centery - self.rect.centery) / (player.h / 2)
+                    self.speed_y = (diff * 2) * -1
+                    self.speed_up()
+                    self.last_hit_player = i
+                break
+        else:
+            self.last_hit_player = None
+
+    def draw(self):
+        mw.blit(self.image, self.rect.topleft)
+        mw.blit(self.blur_image, (self.rect.center[0] - 45, self.rect.center[1] - 45))
+
+
+
+
+
+def move():
+    keys = key.get_pressed()
+    if keys[K_w] and players[0].rect.y > 0:
+        players[0].rect.y -= players[0].speed
+    if keys[K_s] and players[0].rect.y + players[0].h < mw_size[1]:
+        players[0].rect.y += players[0].speed
+
+    if keys[K_UP] and players[1].rect.y > 0:
+        players[1].rect.y -= players[1].speed
+    if keys[K_DOWN] and players[1].rect.y + players[1].h < mw_size[1]:
+        players[1].rect.y += players[1].speed
+
+
+def lose(player):
+    for i in range(7):
+        mw.fill(back)
+        BALL.draw()
+        for p in players:
+            if p == player:
+                p.hiden = not p.hiden
+                if not p.hiden:
+                    p.draw()
+            else:
+                p.draw()
+                    
+        display.update()
+        sleep(0.3)
+    for p in players:
+        p.rect.y = 250 - (p.h // 2)
+        if p is not player:
+            p.score += 1
+    print(f"{players[0].score}:{players[1].score}")
+
+    BALL.rect.x, BALL.rect.y = (350, 250)
+    BALL.speed_x = max(int(BALL.speed_x // 2), 2)
+    display.update()
+    
+        
+    
+
 
 enemies = []
-for i in range(3):
 
-    for j in range(9 - i):
-        x = 5 + offset // 2 * i + offset * j
-        y = 5 + offset * i
-        printer = Picture(mw, 50, 50, x, y, "enemy.png")
-        enemies.append(printer)
+players = (Player("player.png", "player_blur.png", 40, 250, 13, 95), Player("player.png", "player_blur.png", 660, 250, 13, 95))
 
-ball_speed = 3
-platform_speed = 3
+BALL = Ball("ball.png", "ball_blur.png", 350, 250, 54, 54)
 
-x_speed = ball_speed
-y_speed = ball_speed * -1
-
-ball = Picture(mw, 50, 50, 230, 255, "ball.png")
-platform = Picture(mw, 50, 50, 225, 400, "platform.png")
-
-right_pressed = False
-left_pressed = False
-
-ball_hitable = True
-game_finished = False
 
 running = True
-
+finished = False
 
 
 while running:
-    if not game_finished:
-        mw.fill(back)
+    mw.fill(back)
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+    for e in event.get():
+        if e.type == QUIT:
             running = False
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RIGHT:
-                right_pressed = True
-            elif event.key == pygame.K_LEFT:
-                left_pressed = True
-        if event.type == pygame.KEYUP:
-            if event.key == pygame.K_RIGHT:
-                right_pressed = False
-            elif event.key == pygame.K_LEFT:
-                left_pressed = False
 
-#         # Auto-Pilot:
-#    platform_speed = ball_speed
-#    if not game_finished:
-#        if platform.rect.x < (ball.rect.x - 25) and platform.rect.x < 400:
-#            platform.rect.x+=platform_speed
-#        elif platform.rect.x > (ball.rect.x - 25) and platform.rect.x > 0:
-#            platform.rect.x-=platform_speed
+    if not finished:
+        move()
 
-
-
-    if not game_finished:
-        if right_pressed and platform.rect.x < 400:
-            platform.rect.x+=platform_speed
-        elif left_pressed and platform.rect.x > 0:
-            platform.rect.x-=platform_speed
+        BALL.update()
+        BALL.draw()
 
         
-        if ball.rect.y < 0:
-            y_speed *= -1
-        if ball.rect.x > 450 or ball.rect.x < 0:
-            x_speed *= -1
-        if ball.rect.y > 450:
-            end_screen("lose")
-        if ball.colliderect(platform.rect):
-            y_speed = ball_speed * -1
-            ball_hitable = True
-    
-        ball.rect.x+=x_speed
-        ball.rect.y+=y_speed
-
-    
-        if len(enemies) == 0:
-            end_screen("won")
-        for enemy in enemies:
-            if ball.colliderect(enemy.rect) and ball_hitable:
-                enemies.remove(enemy)
-                y_speed *= -1
-                ball_hitable = False
-            
-        
-            
-    
-    
-    # Отрисовка:
-    
-    for enemy in enemies:
-        enemy.draw()
-
-    
-
-
-    ball.draw()
-    platform.draw()
+        players[0].draw()
+        players[1].draw()
         
 
-    pygame.display.update()
+    display.update()
     clock.tick(60)
 
-pygame.quit()
+
+quit()
